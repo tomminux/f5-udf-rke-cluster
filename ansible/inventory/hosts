@@ -1,0 +1,22 @@
+[infra_server]
+infra-server ansible_host=10.1.1.4 secondNetIf_name=ens6 secondNetIf_ip=10.1.20.20 hostname=infra-server
+
+[infra_server:vars]
+ansible_python_interpreter=/usr/bin/python3
+
+[rke_masters]
+rke-master ansible_host=10.1.1.10 secondNetIf_name=ens6 secondNetIf_ip=10.1.20.60 hostname=rke-master
+
+[rke_nodes]
+rke-node1 ansible_host=10.1.1.11 secondNetIf_name=ens6 secondNetIf_ip=10.1.20.61 hostname=rke-node1
+rke-node2 ansible_host=10.1.1.12 secondNetIf_name=ens6 secondNetIf_ip=10.1.20.62 hostname=rke-node2
+
+[rke_allnodes:children]
+rke_masters
+rke_nodes
+
+[rke_masters:vars]
+ansible_python_interpreter=/usr/bin/python3
+
+[rke_nodes:vars]
+ansible_python_interpreter=/usr/bin/python3
