@@ -82,11 +82,118 @@
         name: docker
         state: restarted
 
-    ## Preparing filesystem to host mysql files for Rancher Server
-    - name: Rancher Server Docker storage configuration
-      file:
-        path: /home/ubuntu/dockerhost-storage/rancher
-        state: directory
-        owner: ubuntu
-        group: ubuntu    
+## ----------------------------------------------------------------------------
+## ..:: DEPLOYING RKE CLUSTER ::..
+## ----------------------------------------------------------------------------
 
+    ## Installing CALICO Overlay network 
+    - name: Downloading -rke- executable file
+      get_url:
+        url: https://github.com/rancher/rke/releases/download/v1.3.2/rke_linux-amd64
+        dest: /usr/local/bin/rke
+        mode: '0755'
+
+    - name: Creating /home/ubuntu/rke-cluster directory
+      file:
+        path: /home/ubuntu/rke-cluster
+        state: directory
+
+    ## Deploying cluster.yml file on infra
+    - name: Copy cluster.yml file
+      copy:
+        src: cluster.yml
+        dest: /home/ubuntu/rke-cluster/cluster.yml
+
+    - name: Deployng the RKE Cluster
+      become: true
+      become_user: ubuntu
+      chdir: /home/ubuntu/rke-cluster
+      command: /bin/bash -c "rke up"
+
+    - name: create .kube directory for user ubuntu on infra-server (Ansible controller)
+      local_action:
+        module: file
+        path: /home/ubuntu/.kube
+        state: directory
+        mode: 0755
+        owner: ubuntu
+
+    - name: Copy kube_config_cluster.yml to ubuntu's .kube directory
+      copy:
+        src: /home/ubuntu/rke-cluster/kube_config_cluster.yml
+        dest: /home/ubuntu/.kube/config-rke
+
+    - name: Copy kube_config_cluster.yml to ubuntu's .kube directory
+      copy:
+        src: /home/ubuntu/rke-cluster/kube_config_cluster.yml
+        dest: /home/ubuntu/.kube/config
+
+## ----------------------------------------------------------------------------
+## ..:: CALICO OVERLAY NETWORK INSTALLATION ON RKE ::..
+## ----------------------------------------------------------------------------
+
+- hosts: infra-server
+  become: yes
+  remote_user: root
+  tasks:
+
+    ## Installing CALICO Overlay network 
+    - name: Downloading -Calico- Manifest file
+      get_url:
+        url: https://docs.projectcalico.org/manifests/calico.yaml
+        dest: /home/ubuntu/calico-rke.yaml
+        mode: '0644'
+
+    - name: Configure Calico to use 10.244.0.0 POD Network - Step 1
+      lineinfile: 
+        dest: /home/ubuntu/calico-rke.yaml
+        regexp: 'CALICO_IPV4POOL_CIDR' 
+        line: '            - name: CALICO_IPV4POOL_CIDR'
+        backrefs: yes
+
+    - name: Configure Calico to use 10.244.0.0 POD Network - Step 2
+      lineinfile: 
+        dest: /home/ubuntu/calico-rke.yaml
+        regexp: '192.168.0.0/16' 
+        line: '              value: "10.244.0.0/16"'
+        backrefs: yes
+
+    - name: Apply Calico Overlay Networking Configuration
+      become: true
+      become_user: ubuntu
+      command: /bin/bash -c "export KUBECONFIG=/home/ubuntu/.kube/config-rke ; kubectl apply -f ~/calico-rke.yaml"
+
+    ## Configuring CALICO for BGP with BIG-IP
+    - name: Creating /etc/calico directory
+      file:
+        path: /etc/calico
+        state: directory
+
+    - name: Downloading calicoctl executable installation file 
+      get_url:
+        url: https://github.com/projectcalico/calicoctl/releases/download/v3.18.6/calicoctl
+        dest: /usr/local/bin
+        mode: '0755'
+ 
+    - name: Copy calico configuration files  
+      copy:
+        src: rke-manifests/calico-overlay/{{ item }}
+        dest: /etc/calico/
+      with_items:
+        - calicoctl-rke.cfg
+        - bgpConfiguration-rke.yaml
+
+    - name: Copying BIGIP BGP Peer configuration file
+      template:
+        src: bigipPeerConfiguration-rke.yaml.j2
+        dest: /etc/calico/bigipPeerConfiguration-rke.yaml
+
+    - name: Configuring Calico BGP on k8s cluster
+      become: yes
+      become_user: ubuntu
+      command: calicoctl create -c /etc/calico/calicoctl-rke.cfg  -f /etc/calico/bgpConfiguration-rke.yaml
+
+    - name: Adding BGIP bigip-security as a BGPPeer
+      become: yes
+      become_user: ubuntu
+      command: calicoctl create -c /etc/calico/calicoctl-rke.cfg -f /etc/calico/bigipPeerConfiguration-rke.yaml
