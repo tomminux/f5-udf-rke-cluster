@@ -20,3 +20,6 @@ ansible_python_interpreter=/usr/bin/python3
 
 [rke_nodes:vars]
 ansible_python_interpreter=/usr/bin/python3
+
+[bigip_nodes]
+bigip-security ansible_host=10.1.1.5 bgp_peer_self_ip=10.1.20.5

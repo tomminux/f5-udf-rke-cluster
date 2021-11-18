@@ -85,8 +85,10 @@
 ## ----------------------------------------------------------------------------
 ## ..:: DEPLOYING RKE CLUSTER ::..
 ## ----------------------------------------------------------------------------
+- hosts: infra-server
+  remote_user: root
+  tasks:
 
-    ## Installing CALICO Overlay network 
     - name: Downloading -rke- executable file
       get_url:
         url: https://github.com/rancher/rke/releases/download/v1.3.2/rke_linux-amd64
@@ -97,18 +99,18 @@
       file:
         path: /home/ubuntu/rke-cluster
         state: directory
+        owner: ubuntu
 
-    ## Deploying cluster.yml file on infra
     - name: Copy cluster.yml file
       copy:
         src: cluster.yml
         dest: /home/ubuntu/rke-cluster/cluster.yml
+        owner: ubuntu
 
     - name: Deployng the RKE Cluster
       become: true
       become_user: ubuntu
-      chdir: /home/ubuntu/rke-cluster
-      command: /bin/bash -c "rke up"
+      command: chdir=/home/ubuntu/rke-cluster /bin/bash -c "rke up"
 
     - name: create .kube directory for user ubuntu on infra-server (Ansible controller)
       local_action:
@@ -122,11 +124,13 @@
       copy:
         src: /home/ubuntu/rke-cluster/kube_config_cluster.yml
         dest: /home/ubuntu/.kube/config-rke
+        owner: ubuntu
 
     - name: Copy kube_config_cluster.yml to ubuntu's .kube directory
       copy:
         src: /home/ubuntu/rke-cluster/kube_config_cluster.yml
         dest: /home/ubuntu/.kube/config
+        owner: ubuntu
 
 ## ----------------------------------------------------------------------------
 ## ..:: CALICO OVERLAY NETWORK INSTALLATION ON RKE ::..
