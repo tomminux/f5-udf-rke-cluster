@@ -107,6 +107,12 @@
         dest: /home/ubuntu/rke-cluster/cluster.yml
         owner: ubuntu
 
+    - name: Copy dnsutils.yaml file
+      copy:
+        src: dnsutils.yaml
+        dest: /home/ubuntu/rke-cluster/dnsutils.yaml
+        owner: ubuntu
+
     - name: Deployng the RKE Cluster
       become: true
       become_user: ubuntu
